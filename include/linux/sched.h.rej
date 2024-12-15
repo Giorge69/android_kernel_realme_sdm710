@@ -1,0 +1,14 @@
+--- include/linux/sched.h
++++ include/linux/sched.h
+@@ -2207,6 +2211,11 @@ struct task_struct {
+ 	/* A live task holds one reference. */
+ 	atomic_t stack_refcount;
+ #endif
++
++#ifdef CONFIG_KSU_SUSFS
++	u64 android_kabi_reserved8;
++#endif
++
+ /* CPU-specific state of this task */
+ 	struct thread_struct thread;
+ /*
