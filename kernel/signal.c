@@ -38,6 +38,7 @@
 #include <linux/compiler.h>
 #include <linux/oom.h>
 #include <linux/capability.h>
+#include <linux/rekernel.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/signal.h>
@@ -1211,6 +1212,13 @@ int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
 	unsigned long flags;
 	int ret = -ESRCH;
 
+	if (start_rekernel_server() == 0) {
+ 		if (line_is_frozen(current) && (sig == SIGKILL || sig == SIGTERM || sig == SIGABRT || sig == SIGQUIT)) {
+     			char binder_kmsg[PACKET_SIZE];
+			snprintf(binder_kmsg, sizeof(binder_kmsg), "type=Signal,signal=%d,killer_pid=%d,killer=%d,dst_pid=%d,dst=%d;", sig, task_tgid_nr(p), task_uid(p).val, task_tgid_nr(current), task_uid(current).val);
+     			send_netlink_message(binder_kmsg, strlen(binder_kmsg));
+ 		}
+ 	}
 #if defined(OPLUS_FEATURE_HANS_FREEZE) && defined(CONFIG_OPLUS_FEATURE_HANS)
 	hans_check_signal(p, sig);
 #endif /*OPLUS_FEATURE_HANS_FREEZE*/
