@@ -777,9 +777,6 @@ static inline u32 tcp_time_stamp_raw(void)
 static inline void tcp_mstamp_refresh(struct tcp_sock *tp)
 {
 	u64 val = tcp_clock_us();
-
-	if (val > tp->tcp_mstamp)
-		tp->tcp_mstamp = val;
 }
 
 static inline u32 tcp_stamp_us_delta(u64 t1, u64 t0)
