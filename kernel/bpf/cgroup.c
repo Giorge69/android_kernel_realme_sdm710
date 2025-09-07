@@ -131,8 +131,12 @@ static int compute_effective_progs(struct cgroup *cgrp,
 		list_for_each_entry(pl, &p->bpf.progs[type], node) {
 			if (!pl->prog)
 				continue;
-				rcu_dereference_protected(progs, 1)->
-					progs[cnt++] = pl->prog;
+
+			progs->items[cnt].prog = pl->prog;
+			for_each_cgroup_storage_type(stype)
+ 				progs->items[cnt].cgroup_storage[stype] =
+ 					pl->storage[stype];
+			cnt++;									  
 		}
 	} while ((p = cgroup_parent(p)));
 
