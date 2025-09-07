@@ -1631,6 +1631,18 @@ bool tcp_fastopen_cookie_check(struct sock *sk, u16 *mss,
 bool tcp_fastopen_defer_connect(struct sock *sk, int *err);
 #define TCP_FASTOPEN_KEY_LENGTH 16
 
+static inline void tcp_init_send_head(struct sock *sk)												  
+{
+	sk->sk_send_head = NULL;
+}
+
+/* Fastopen key context */
+struct tcp_fastopen_context {
+	struct crypto_cipher	*tfm;
+	__u8			key[TCP_FASTOPEN_KEY_LENGTH];
+	struct rcu_head		rcu;
+};
+
 /* Latencies incurred by various limits for a sender. They are
  * chronograph-like stats that are mutually exclusive.
  */
@@ -1645,16 +1657,6 @@ enum tcp_chrono {
 void tcp_chrono_start(struct sock *sk, const enum tcp_chrono type);
 void tcp_chrono_stop(struct sock *sk, const enum tcp_chrono type);
 
-{
-	sk->sk_send_head = NULL;
-}
-
-/* Fastopen key context */
-struct tcp_fastopen_context {
-	struct crypto_cipher	*tfm;
-	__u8			key[TCP_FASTOPEN_KEY_LENGTH];
-	struct rcu_head		rcu;
-};
 
 /* write queue abstraction */
 static inline void tcp_write_queue_purge(struct sock *sk)
@@ -1663,6 +1665,7 @@ static inline void tcp_write_queue_purge(struct sock *sk)
 
 	while ((skb = __skb_dequeue(&sk->sk_write_queue)) != NULL)
 		sk_wmem_free_skb(sk, skb);
+	tcp_init_send_head(sk);
 	sk_mem_reclaim(sk);
 	tcp_clear_all_retrans_hints(tcp_sk(sk));
 	tcp_init_send_head(sk);
@@ -1920,11 +1923,7 @@ void __tcp_v4_send_check(struct sk_buff *skb, __be32 saddr, __be32 daddr);
 static inline u32 tcp_notsent_lowat(const struct tcp_sock *tp)
 {
 	struct net *net = sock_net((struct sock *)tp);
-	u32 val;
-
-	val = READ_ONCE(tp->notsent_lowat);
-
-	return val ?: READ_ONCE(net->ipv4.sysctl_tcp_notsent_lowat);
+	return tp->notsent_lowat ?: READ_ONCE(net->ipv4.sysctl_tcp_notsent_lowat);
 }
 
 /* @wake is one when sk_stream_write_space() calls us.
