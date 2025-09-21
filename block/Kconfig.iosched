@@ -96,11 +96,12 @@ choice
 	config DEFAULT_ANXIETY
 		bool "Anxiety" if IOSCHED_ANXIETY=y
 
+	config DEFAULT_MAPLE
+		bool "Maple" if IOSCHED_MAPLE=y
+
 	config DEFAULT_NOOP
 		bool "No-op"
 
-	config DEFAULT_MAPLE
-		bool "Maple" if IOSCHED_MAPLE=y
 endchoice
 
 config DEFAULT_IOSCHED
