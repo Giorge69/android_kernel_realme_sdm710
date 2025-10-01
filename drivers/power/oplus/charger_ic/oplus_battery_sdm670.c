@@ -8372,33 +8372,116 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 }
 
 
-static int smb2_batt_prop_is_writeable(struct power_supply *psy,
-		enum power_supply_property psp)
+static int smb2_batt_set_prop(struct power_supply *psy,
+	enum power_supply_property prop,
+	const union power_supply_propval *val)
 {
-	int rc = 0;
+int rc = 0;
+struct smb_charger *chg = power_supply_get_drvdata(psy);
 
-	switch (psp) {
-	case POWER_SUPPLY_PROP_STATUS:
-	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
-	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
-	case POWER_SUPPLY_PROP_CAPACITY:
-	case POWER_SUPPLY_PROP_PARALLEL_DISABLE:
-	case POWER_SUPPLY_PROP_DP_DM:
-	case POWER_SUPPLY_PROP_RERUN_AICL:
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMITED:
-	case POWER_SUPPLY_PROP_STEP_CHARGING_ENABLED:
-	case POWER_SUPPLY_PROP_SW_JEITA_ENABLED:
-	case POWER_SUPPLY_PROP_DIE_HEALTH:
-		return 1;
-	default:
+switch (prop) {
+case POWER_SUPPLY_PROP_STATUS:
+	rc = smblib_set_prop_batt_status(chg, val);
+	break;
+case POWER_SUPPLY_PROP_INPUT_SUSPEND:
+	rc = smblib_set_prop_input_suspend(chg, val);
+	break;
+
+/* --- بداية الإضافة --- */
+case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
+	if (oplus_chg_set_cool_down) {
+		/* The value from userspace (val->intval) is in microamps (uA).
+		 * The driver function expects milliamps (mA), so we divide by 1000.
+		 */
+		oplus_chg_set_cool_down(val->intval / 1000);
+	}
+	break;
+
+case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX:
+	// NOTE: There isn't a clear function for LIMIT_MAX in oplus drivers.
+	// We will use the same function as LIMIT for now.
+	// You might need to find a more specific function later.
+	if (oplus_chg_set_cool_down) {
+		oplus_chg_set_cool_down(val->intval / 1000);
+	}
+	break;
+
+case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT: // This is duplicated, let's keep the original one as well
+	rc = smblib_set_prop_system_temp_level(chg, val);
+	break;
+case POWER_SUPPLY_PROP_CAPACITY:
+	rc = smblib_set_prop_batt_capacity(chg, val);
+	break;
+case POWER_SUPPLY_PROP_PARALLEL_DISABLE:
+	vote(chg->pl_disable_votable, USER_VOTER, (bool)val->intval, 0);
+	break;
+case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+	chg->batt_profile_fv_uv = val->intval;
+	vote(chg->fv_votable, BATT_PROFILE_VOTER, true, val->intval);
+	break;
+case POWER_SUPPLY_PROP_CHARGE_QNOVO_ENABLE:
+	rc = smblib_set_prop_charge_qnovo_enable(chg, val);
+	break;
+case POWER_SUPPLY_PROP_VOLTAGE_QNOVO:
+	vote(chg->fv_votable, QNOVO_VOTER,
+		(val->intval >= 0), val->intval);
+	break;
+case POWER_SUPPLY_PROP_CURRENT_QNOVO:
+	vote(chg->pl_disable_votable, PL_QNOVO_VOTER,
+		val->intval != -EINVAL && val->intval < 2000000, 0);
+	if (val->intval == -EINVAL) {
+		vote(chg->fcc_votable, BATT_PROFILE_VOTER,
+				true, chg->batt_profile_fcc_ua);
+		vote(chg->fcc_votable, QNOVO_VOTER, false, 0);
+	} else {
+		vote(chg->fcc_votable, QNOVO_VOTER, true, val->intval);
+		vote(chg->fcc_votable, BATT_PROFILE_VOTER, false, 0);
+	}
+	break;
+case POWER_SUPPLY_PROP_STEP_CHARGING_ENABLED:
+	chg->step_chg_enabled = !!val->intval;
+	break;
+case POWER_SUPPLY_PROP_SW_JEITA_ENABLED:
+	if (chg->sw_jeita_enabled != (!!val->intval)) {
+		rc = smblib_disable_hw_jeita(chg, !!val->intval);
+		if (rc == 0)
+			chg->sw_jeita_enabled = !!val->intval;
+	}
+	break;
+case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
+	chg->batt_profile_fcc_ua = val->intval;
+	vote(chg->fcc_votable, BATT_PROFILE_VOTER, true, val->intval);
+	break;
+case POWER_SUPPLY_PROP_SET_SHIP_MODE:
+	/* Not in ship mode as long as the device is active */
+	if (!val->intval)
+		break;
+	if (chg->pl.psy)
+		power_supply_set_property(chg->pl.psy,
+			POWER_SUPPLY_PROP_SET_SHIP_MODE, val);
+	rc = smblib_set_prop_ship_mode(chg, val);
+	break;
+case POWER_SUPPLY_PROP_RERUN_AICL:
+	rc = smblib_rerun_aicl(chg);
+	break;
+case POWER_SUPPLY_PROP_DP_DM:
+	rc = smblib_dp_dm(chg, val->intval);
+	break;
+case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMITED:
+	rc = smblib_set_prop_input_current_limited(chg, val);
+	break;
+case POWER_SUPPLY_PROP_DIE_HEALTH:
+	chg->die_health = val->intval;
+	power_supply_changed(chg->batt_psy);
+	break;
+default:
 #ifdef VENDOR_EDIT
 /*oplus own battery props*/
-		rc = oplus_battery_property_is_writeable(psy, psp);
+	rc = oplus_battery_set_property(psy, prop, val);
 #endif
-		break;
-	}
+}
 
-	return rc;
+return rc;
 }
 
 
