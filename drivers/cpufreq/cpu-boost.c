@@ -36,10 +36,10 @@ static struct work_struct input_boost_work;
 
 static bool input_boost_enabled;
 
-static unsigned int input_boost_ms = 40;
+static unsigned int input_boost_ms = 120;
 module_param(input_boost_ms, uint, 0644);
 
-static unsigned int sched_boost_on_input;
+static unsigned int sched_boost_on_input = 1;
 module_param(sched_boost_on_input, uint, 0644);
 
 static bool sched_boost_active;
@@ -327,6 +327,14 @@ static int cpu_boost_init(void)
 		s = &per_cpu(sync_info, cpu);
 		s->cpu = cpu;
 	}
+
+        for_each_possible_cpu(cpu) {
+                s = &per_cpu(sync_info, cpu);
+                if (cpu <= 3)
+                        s->input_boost_freq = 979200;
+                else if (cpu <= 7)
+                        s->input_boost_freq = 1363200;
+        }
 	cpufreq_register_notifier(&boost_adjust_nb, CPUFREQ_POLICY_NOTIFIER);
 
 	ret = input_register_handler(&cpuboost_input_handler);
